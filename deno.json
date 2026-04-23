@@ -1,0 +1,25 @@
+{
+  "name": "@rrulenet/recurrence",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "exclude": [
+    ".github/",
+    "dist/",
+    "test/",
+    "scripts/",
+    "badges/",
+    "coverage-output.txt",
+    "node_modules/",
+    "tsconfig.json"
+  ],
+  "imports": {
+    "@rrulenet/core": "../core/src/index.ts",
+    "@rrulenet/core/engine": "../core/src/engine.ts",
+    "@rrulenet/core/options": "../core/src/options.ts",
+    "@rrulenet/core/rule": "../core/src/rule.ts",
+    "@rrulenet/core/text": "../core/src/text.ts",
+    "@rrulenet/core/time": "../core/src/time.ts"
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "name": "@rrulenet/recurrence",
+  "version": "0.1.0",
+  "description": "Temporal-first recurrence API for rules, composed schedules, and RFC 5545 parsing.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rrulenet/recurrence.git"
+  },
+  "homepage": "https://github.com/rrulenet/recurrence#readme",
+  "bugs": {
+    "url": "https://github.com/rrulenet/recurrence/issues"
+  },
+  "keywords": [
+    "rrule",
+    "recurrence",
+    "rfc5545",
+    "ical",
+    "temporal",
+    "calendar"
+  ],
+  "files": [
+    "assets",
+    "LICENSE",
+    "README.md",
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "types": "./dist/index.d.mts",
+  "scripts": {
+    "build": "npm exec --package=tsdown --package=typescript -- tsdown --config tsdown.config.ts",
+    "test": "npm run build && node --test test/**/*.test.js",
+    "coverage": "npm run build && node --experimental-test-coverage --test-coverage-include=dist/**/*.mjs --test test/**/*.test.js",
+    "coverage:badge": "node scripts/write-coverage-badge.mjs coverage-output.txt badges/coverage.json",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rrulenet/core": "^0.1.0",
+    "temporal-polyfill": "^0.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsdown": "^0.21.9",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

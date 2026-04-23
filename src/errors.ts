@@ -1,3 +1,6 @@
+/**
+ * Stable public error codes emitted by the `@rrulenet/recurrence` API.
+ */
 export const TEMPORAL_ERROR_CODES = {
   INVALID_OPTIONS: 'TEMPORAL_INVALID_OPTIONS',
   INVALID_RRULE_STRING: 'TEMPORAL_INVALID_RRULE_STRING',
@@ -11,8 +14,14 @@ export const TEMPORAL_ERROR_CODES = {
   UNSERIALIZABLE_EXPRESSION: 'TEMPORAL_UNSERIALIZABLE_EXPRESSION',
 } as const;
 
+/**
+ * Union of all public error code values.
+ */
 export type TemporalErrorCode = (typeof TEMPORAL_ERROR_CODES)[keyof typeof TEMPORAL_ERROR_CODES];
 
+/**
+ * Public error class used by the Temporal-first recurrence API.
+ */
 export class TemporalApiError extends Error {
   readonly code: TemporalErrorCode;
 
@@ -23,6 +32,9 @@ export class TemporalApiError extends Error {
   }
 }
 
+/**
+ * Throw a typed public recurrence API error.
+ */
 export function recurrenceError(code: TemporalErrorCode, message: string): never {
   throw new TemporalApiError(code, message);
 }

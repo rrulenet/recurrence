@@ -25,11 +25,24 @@ type RecurrenceStructure =
   | { kind: 'union' | 'intersection'; expressions: RecurrenceStructure[] }
   | { kind: 'difference'; include: RecurrenceStructure; exclude: RecurrenceStructure };
 
+/**
+ * Temporal-first recurrence expression with first-class set algebra.
+ *
+ * `Recurrence` is the central public type exposed by `@rrulenet/recurrence`.
+ * It can be constructed from a canonical input shape, parsed from RFC strings,
+ * queried for occurrences, serialized, and combined with other recurrence
+ * expressions through union, intersection, and difference.
+ */
 export class Recurrence {
   private state: RecurrenceState | null = null;
   private expression!: SetExpression;
   private structure!: RecurrenceStructure;
 
+  /**
+   * Create a recurrence from an already-built internal state.
+   *
+   * This is primarily used by parsing and normalization helpers.
+   */
   static fromState(state: RecurrenceState): Recurrence {
     const recurrence = Object.create(Recurrence.prototype) as Recurrence;
     recurrence.state = state;
@@ -73,6 +86,9 @@ export class Recurrence {
     }
   }
 
+  /**
+   * Build a recurrence from the canonical input shape.
+   */
   constructor(input: RecurrenceInput) {
     validateOptionsObject(input, 'constructor');
     const state = buildState(input);
@@ -81,10 +97,16 @@ export class Recurrence {
     this.structure = { kind: 'input', input: inputFromState(state) };
   }
 
+  /**
+   * Parse an RFC 5545 recurrence string into a `Recurrence`.
+   */
   static parse(options: RecurrenceParseOptions): Recurrence {
     return recurrenceFromParsedOptions(options, Recurrence.fromState);
   }
 
+  /**
+   * Create a single-rule recurrence.
+   */
   static rule(options: RecurrenceRuleInput): Recurrence {
     validateOptionsObject(options, 'rule');
     return new Recurrence({
@@ -94,6 +116,9 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Create a recurrence from explicit dates only.
+   */
   static dates(values: TemporalDateLike[], options: { start?: TemporalDateLike | null; tzid?: string | null } = {}): Recurrence {
     validateDateArray(values, 'Recurrence.dates()');
     validateOptionsObject(options, 'dates');
@@ -104,10 +129,16 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Rebuild a recurrence from its JSON representation.
+   */
   static fromJSON(json: RecurrenceJson): Recurrence {
     return Recurrence.fromStructure(structureFromJson(json));
   }
 
+  /**
+   * Create the union of multiple recurrence expressions.
+   */
   static union(...recurrences: Recurrence[]): Recurrence {
     if (!recurrences.length) {
       recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'Recurrence.union() expects at least one recurrence');
@@ -121,6 +152,9 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Create the intersection of multiple recurrence expressions.
+   */
   static intersection(...recurrences: Recurrence[]): Recurrence {
     if (!recurrences.length) {
       recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'Recurrence.intersection() expects at least one recurrence');
@@ -134,6 +168,9 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Subtract one recurrence expression from another.
+   */
   static difference(include: Recurrence, exclude: Recurrence): Recurrence {
     return Recurrence.fromExpression({
       kind: 'difference',
@@ -146,19 +183,31 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Resolved start of the flat recurrence, when present.
+   */
   get start(): Temporal.ZonedDateTime | null {
     return this.state?.start ?? null;
   }
 
+  /**
+   * Resolved timezone identifier of the flat recurrence, when present.
+   */
   get tzid(): string | null {
     return this.state?.tzid ?? null;
   }
 
+  /**
+   * Return all occurrences, optionally short-circuiting through an iterator.
+   */
   all(iterator?: (value: Temporal.ZonedDateTime, index: number) => boolean): Temporal.ZonedDateTime[] {
     const values = new SetEngine(this.expression).all();
     return iterator ? applyIterator(values, iterator) : values;
   }
 
+  /**
+   * Return occurrences between two boundaries.
+   */
   between(after: TemporalDateLike, before: TemporalDateLike, inc = false, iterator?: (value: Temporal.ZonedDateTime, index: number) => boolean): Temporal.ZonedDateTime[] {
     const values = new SetEngine(this.expression).between(
       coerceBoundary(after, this.state?.tzid),
@@ -168,48 +217,80 @@ export class Recurrence {
     return iterator ? applyIterator(values, iterator) : values;
   }
 
+  /**
+   * Return the first occurrence strictly after, or optionally equal to, the
+   * provided boundary.
+   */
   after(date: TemporalDateLike, inc = false): Temporal.ZonedDateTime | null {
     return new SetEngine(this.expression).after(coerceBoundary(date, this.state?.tzid), inc);
   }
 
+  /**
+   * Return the last occurrence strictly before, or optionally equal to, the
+   * provided boundary.
+   */
   before(date: TemporalDateLike, inc = false): Temporal.ZonedDateTime | null {
     return new SetEngine(this.expression).before(coerceBoundary(date, this.state?.tzid), inc);
   }
 
+  /**
+   * Return the first occurrence, if any.
+   */
   first(): Temporal.ZonedDateTime | null {
     return this.all((_, index) => index < 1)[0] ?? null;
   }
 
+  /**
+   * Return the first `count` occurrences.
+   */
   take(count: number): Temporal.ZonedDateTime[] {
     assertNonNegativeInteger(count, 'take()');
     if (count === 0) return [];
     return this.all((_, index) => index < count);
   }
 
+  /**
+   * Count occurrences, optionally stopping after the provided limit.
+   */
   count(limit?: number): number {
     if (limit === undefined) return this.all().length;
     assertNonNegativeInteger(limit, 'count()');
     return this.take(limit).length;
   }
 
+  /**
+   * Report whether the recurrence yields at least one occurrence.
+   */
   hasAny(): boolean {
     return this.first() !== null;
   }
 
+  /**
+   * Report whether the recurrence yields no occurrences.
+   */
   isEmpty(): boolean {
     return !this.hasAny();
   }
 
+  /**
+   * Report whether at least one occurrence exists within the given range.
+   */
   hasAnyBetween(after: TemporalDateLike, before: TemporalDateLike, inc = false): boolean {
     return this.between(after, before, inc, (_, index) => index < 1).length > 0;
   }
 
+  /**
+   * Report whether an occurrence exists exactly at the provided boundary.
+   */
   occursAt(date: TemporalDateLike): boolean {
     const boundary = coerceBoundary(date, this.state?.tzid);
     const value = new SetEngine(this.expression).after(boundary, true);
     return value ? Temporal.Instant.compare(value.toInstant(), boundary) === 0 : false;
   }
 
+  /**
+   * Return a new recurrence with additional explicit included dates.
+   */
   includingDates(values: TemporalDateLike[]): Recurrence {
     validateDateArray(values, 'includingDates()');
     if (!this.state) return Recurrence.union(this, Recurrence.dates(values));
@@ -221,6 +302,9 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Return a new recurrence with additional explicit excluded dates.
+   */
   excludingDates(values: TemporalDateLike[]): Recurrence {
     validateDateArray(values, 'excludingDates()');
     if (!this.state) return Recurrence.difference(this, Recurrence.dates(values));
@@ -232,30 +316,51 @@ export class Recurrence {
     });
   }
 
+  /**
+   * Return the union of this recurrence and additional operands.
+   */
   union(...recurrences: Recurrence[]): Recurrence {
     return Recurrence.union(this, ...recurrences);
   }
 
+  /**
+   * Return the intersection of this recurrence and additional operands.
+   */
   intersection(...recurrences: Recurrence[]): Recurrence {
     return Recurrence.intersection(this, ...recurrences);
   }
 
+  /**
+   * Return this recurrence minus another recurrence.
+   */
   difference(exclude: Recurrence): Recurrence {
     return Recurrence.difference(this, exclude);
   }
 
+  /**
+   * Clone the recurrence expression.
+   */
   clone(): Recurrence {
     return Recurrence.fromStructure(this.structure);
   }
 
+  /**
+   * Compare two recurrence expressions by their public JSON form.
+   */
   equals(other: Recurrence): boolean {
     return JSON.stringify(this.toJSON()) === JSON.stringify(other.toJSON());
   }
 
+  /**
+   * Normalize nested algebraic structures where possible.
+   */
   normalize(): Recurrence {
     return Recurrence.fromStructure(normalizeStructure(this.structure));
   }
 
+  /**
+   * Alias for {@link normalize}.
+   */
   flatten(): Recurrence {
     return this.normalize();
   }

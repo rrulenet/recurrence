@@ -1,15 +1,20 @@
 {
   "$schema": "https://jsr.io/schema/config-file.v1.json",
   "name": "@rrulenet/recurrence",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "exports": {
     ".": "./src/index.ts"
   },
   "exclude": [
     ".github/",
     "dist/",
+    "deno.json",
+    "package-lock.json",
+    "package.json",
     "test/",
     "scripts/",
+    "tsdown.config.ts",
+    "tsconfig.json",
     "badges/",
     "coverage-output.txt",
     "node_modules/"

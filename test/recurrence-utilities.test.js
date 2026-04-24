@@ -32,6 +32,35 @@ test('Recurrence query helpers expose first, take, count, hasAnyBetween, hasAny,
   assert.equal(recurrence.occursAt(Temporal.Instant.from('2025-01-03T10:00:00Z')), false);
 });
 
+test('Recurrence.takeAfter returns occurrences after a boundary', () => {
+  const recurrence = Recurrence.rule({
+    freq: 'DAILY',
+    count: 4,
+    start: Temporal.ZonedDateTime.from('2025-01-01T09:00:00Z[UTC]'),
+  });
+
+  assert.deepEqual(
+    recurrence
+      .takeAfter(Temporal.Instant.from('2025-01-02T09:00:00Z'), 2)
+      .map((value) => value.toString()),
+    [
+      '2025-01-03T09:00:00+00:00[UTC]',
+      '2025-01-04T09:00:00+00:00[UTC]',
+    ],
+  );
+  assert.deepEqual(
+    recurrence
+      .takeAfter(Temporal.Instant.from('2025-01-02T09:00:00Z'), 2, true)
+      .map((value) => value.toString()),
+    [
+      '2025-01-02T09:00:00+00:00[UTC]',
+      '2025-01-03T09:00:00+00:00[UTC]',
+    ],
+  );
+  assert.deepEqual(recurrence.takeAfter(Temporal.Instant.from('2025-01-01T00:00:00Z'), 0), []);
+  assert.throws(() => recurrence.takeAfter(Temporal.Instant.from('2025-01-01T00:00:00Z'), -1), /takeAfter\(\) expects a non-negative integer/);
+});
+
 test('Recurrence clone and equals work on flat and algebraic expressions', () => {
   const weekdays = Recurrence.rule({
     freq: 'WEEKLY',
@@ -173,6 +202,25 @@ test('Recurrence.fromJSON rebuilds a flat recurrence', () => {
     '1997-09-02T09:00:00-04:00[America/New_York]',
     '1997-09-04T09:00:00-04:00[America/New_York]',
   ]);
+});
+
+test('Recurrence.isJSON and validateJSON expose non-throwing JSON validation', () => {
+  const recurrence = Recurrence.rule({
+    freq: 'DAILY',
+    count: 2,
+    start: Temporal.ZonedDateTime.from('2025-01-01T09:00:00Z[UTC]'),
+  });
+  const json = recurrence.toJSON();
+
+  assert.equal(Recurrence.isJSON(json), true);
+  assert.deepEqual(Recurrence.validateJSON(json), { ok: true });
+  assert.equal(Recurrence.isJSON({ kind: 'input', include: [] }), false);
+
+  const result = Recurrence.validateJSON({ kind: 'input', include: [] });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.match(result.error.message, /Cannot read properties|expects/);
+  }
 });
 
 test('Recurrence.fromJSON rebuilds algebraic recurrences recursively', () => {

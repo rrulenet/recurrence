@@ -137,6 +137,28 @@ export class Recurrence {
   }
 
   /**
+   * Report whether a value is accepted by {@link Recurrence.fromJSON}.
+   */
+  static isJSON(value: unknown): value is RecurrenceJson {
+    return Recurrence.validateJSON(value).ok;
+  }
+
+  /**
+   * Validate a value as recurrence JSON without throwing.
+   */
+  static validateJSON(value: unknown): { ok: true } | { ok: false; error: Error } {
+    try {
+      Recurrence.fromJSON(value as RecurrenceJson);
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error : new Error(String(error)),
+      };
+    }
+  }
+
+  /**
    * Create the union of multiple recurrence expressions.
    */
   static union(...recurrences: Recurrence[]): Recurrence {
@@ -247,6 +269,28 @@ export class Recurrence {
     assertNonNegativeInteger(count, 'take()');
     if (count === 0) return [];
     return this.all((_, index) => index < count);
+  }
+
+  /**
+   * Return the next `count` occurrences after a boundary.
+   */
+  takeAfter(date: TemporalDateLike, count: number, inc = false): Temporal.ZonedDateTime[] {
+    assertNonNegativeInteger(count, 'takeAfter()');
+    if (count === 0) return [];
+
+    const out: Temporal.ZonedDateTime[] = [];
+    let boundary = coerceBoundary(date, this.state?.tzid);
+    let inclusive = inc;
+
+    while (out.length < count) {
+      const value = new SetEngine(this.expression).after(boundary, inclusive);
+      if (!value) break;
+      out.push(value);
+      boundary = value.toInstant();
+      inclusive = false;
+    }
+
+    return out;
   }
 
   /**

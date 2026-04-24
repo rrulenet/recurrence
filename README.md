@@ -110,13 +110,19 @@ This package models that directly as one recurrence expression instead of forcin
 
 ## API
 
-```js
+```ts
 import {
   Recurrence,
   parse,
   rule,
   TEMPORAL_ERROR_CODES,
   TemporalApiError,
+} from '@rrulenet/recurrence';
+
+import type {
+  RecurrenceJson,
+  RecurrenceJsonEntry,
+  RecurrenceJsonRuleInput,
 } from '@rrulenet/recurrence';
 ```
 
@@ -126,6 +132,11 @@ Main exports:
 - `rule(options)`
 - `TEMPORAL_ERROR_CODES`
 - `TemporalApiError`
+
+Type exports:
+- `RecurrenceJson`
+- `RecurrenceJsonEntry`
+- `RecurrenceJsonRuleInput`
 
 ### `Recurrence`
 
@@ -307,6 +318,26 @@ console.log(preview.map((value) => value.toString()));
 //   '2025-01-10T09:00:00+01:00[Europe/Paris]'
 // ]
 ```
+
+#### `recurrence.takeAfter(date, count, inc = false)`
+
+Return the next `count` occurrences after a boundary.
+
+```js
+const upcoming = recurrence.takeAfter(
+  Temporal.Instant.from('2025-01-05T12:00:00Z'),
+  3,
+);
+
+console.log(upcoming.map((value) => value.toString()));
+// [
+//   '2025-01-06T09:00:00+01:00[Europe/Paris]',
+//   '2025-01-08T09:00:00+01:00[Europe/Paris]',
+//   '2025-01-10T09:00:00+01:00[Europe/Paris]'
+// ]
+```
+
+This is useful for product APIs, queues, and dashboards that need the next N occurrences from a moving boundary without manually looping over `after()`.
 
 #### `recurrence.count(limit?)`
 
@@ -624,6 +655,29 @@ console.log(rebuilt instanceof Recurrence);
 ```
 
 This supports both flat input-shaped recurrences and algebraic expressions such as unions, intersections, and differences.
+
+#### `Recurrence.isJSON(value)` and `Recurrence.validateJSON(value)`
+
+Validate a persisted or received JSON value before rebuilding a `Recurrence`.
+
+```js
+const saved = recurrence.toJSON();
+
+console.log(Recurrence.isJSON(saved));
+// true
+
+const validation = Recurrence.validateJSON(saved);
+console.log(validation);
+// { ok: true }
+
+if (Recurrence.isJSON(saved)) {
+  const rebuilt = Recurrence.fromJSON(saved);
+  console.log(rebuilt.equals(recurrence));
+  // true
+}
+```
+
+Use `isJSON()` when you want TypeScript narrowing. Use `validateJSON()` when an API boundary needs a non-throwing result that can expose the validation error.
 
 #### `recurrence.clone()`
 

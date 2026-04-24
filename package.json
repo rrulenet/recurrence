@@ -1,6 +1,6 @@
 {
   "name": "@rrulenet/recurrence",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Temporal-first recurrence API for rules, composed schedules, and RFC 5545 parsing.",
   "license": "MIT",
   "type": "module",
@@ -44,7 +44,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@rrulenet/core": "^0.1.1",
+    "@rrulenet/core": "^0.1.2",
     "temporal-polyfill": "^0.3.2"
   },
   "devDependencies": {

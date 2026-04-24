@@ -25,6 +25,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@rrulenet/recurrence"><img src="https://img.shields.io/npm/v/%40rrulenet%2Frecurrence" alt="npm version"></a>
+  <a href="https://jsr.io/@rrulenet/recurrence"><img src="https://img.shields.io/jsr/v/%40rrulenet%2Frecurrence" alt="JSR version"></a>
   <a href="https://rrulenet.github.io/recurrence/coverage.json"><img src="https://img.shields.io/endpoint?url=https://rrulenet.github.io/recurrence/coverage.json" alt="Coverage"></a>
   <img src="https://img.shields.io/badge/license-MIT-2563EB" alt="MIT License">
 </p>

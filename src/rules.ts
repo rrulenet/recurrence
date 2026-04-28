@@ -49,6 +49,10 @@ export class RuleRecurrenceSource implements SourceQuery {
     return this.source.after(after, inc);
   }
 
+  occursAt(instant: Temporal.Instant): boolean {
+    return this.source.occursAt(instant);
+  }
+
   before(before: Temporal.Instant, inc: boolean): Temporal.ZonedDateTime | null {
     return this.source.before(before, inc);
   }

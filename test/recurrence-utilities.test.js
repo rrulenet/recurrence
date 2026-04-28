@@ -61,6 +61,55 @@ test('Recurrence.takeAfter returns occurrences after a boundary', () => {
   assert.throws(() => recurrence.takeAfter(Temporal.Instant.from('2025-01-01T00:00:00Z'), -1), /takeAfter\(\) expects a non-negative integer/);
 });
 
+test('Recurrence.takeAfter handles monthly set-position exclusions', () => {
+  const recurrence = new Recurrence({
+    start: Temporal.ZonedDateTime.from('2026-01-01T18:00:00+01:00[Europe/Paris]'),
+    include: [
+      {
+        rule: {
+          freq: 'MONTHLY',
+          byDay: ['TU'],
+          bySetPos: [2],
+          byHour: [18],
+          byMinute: [0],
+          bySecond: [0],
+        },
+      },
+    ],
+    exclude: [
+      {
+        rule: {
+          freq: 'MONTHLY',
+          byMonth: [8],
+          byDay: ['TU'],
+          bySetPos: [2],
+          byHour: [18],
+          byMinute: [0],
+          bySecond: [0],
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    recurrence
+      .takeAfter(Temporal.Instant.from('2026-01-01T00:00:00Z'), 10)
+      .map((value) => value.toPlainDate().toString()),
+    [
+      '2026-01-13',
+      '2026-02-10',
+      '2026-03-10',
+      '2026-04-14',
+      '2026-05-12',
+      '2026-06-09',
+      '2026-07-14',
+      '2026-09-08',
+      '2026-10-13',
+      '2026-11-10',
+    ],
+  );
+});
+
 test('Recurrence clone and equals work on flat and algebraic expressions', () => {
   const weekdays = Recurrence.rule({
     freq: 'WEEKLY',

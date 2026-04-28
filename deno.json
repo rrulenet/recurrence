@@ -1,6 +1,6 @@
 {
   "name": "@rrulenet/recurrence",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -18,11 +18,11 @@
     "tsdown.config.ts"
   ],
   "imports": {
-    "@rrulenet/core": "jsr:@rrulenet/core@^0.1.3",
-    "@rrulenet/core/engine": "jsr:@rrulenet/core@^0.1.3/engine",
-    "@rrulenet/core/options": "jsr:@rrulenet/core@^0.1.3/options",
-    "@rrulenet/core/rule": "jsr:@rrulenet/core@^0.1.3/rule",
-    "@rrulenet/core/text": "jsr:@rrulenet/core@^0.1.3/text",
-    "@rrulenet/core/time": "jsr:@rrulenet/core@^0.1.3/time"
+    "@rrulenet/core": "jsr:@rrulenet/core@^0.1.4",
+    "@rrulenet/core/engine": "jsr:@rrulenet/core@^0.1.4/engine",
+    "@rrulenet/core/options": "jsr:@rrulenet/core@^0.1.4/options",
+    "@rrulenet/core/rule": "jsr:@rrulenet/core@^0.1.4/rule",
+    "@rrulenet/core/text": "jsr:@rrulenet/core@^0.1.4/text",
+    "@rrulenet/core/time": "jsr:@rrulenet/core@^0.1.4/time"
   }
 }

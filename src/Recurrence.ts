@@ -2,6 +2,7 @@ import { SetEngine, type SetExpression } from '@rrulenet/core/engine';
 import { describeSetExpression, isSetExpressionFullyConvertible, type ToTextOptions } from '@rrulenet/core/text';
 import { Temporal } from 'temporal-polyfill';
 
+import { elapsedRfc } from './elapsed.ts';
 import { TEMPORAL_ERROR_CODES, recurrenceError } from './errors.ts';
 import { recurrenceFromParsedOptions } from './parse.ts';
 import { coreOptionsToRuleInput } from './rules.ts';
@@ -10,6 +11,8 @@ import { buildState, expressionFromState, type RecurrenceState, validateDateArra
 import { coerceBoundary, validateOptionsObject } from './temporal-coercion.ts';
 import type {
   RecurrenceEntry,
+  RecurrenceElapsedInput,
+  RecurrenceJsonOptions,
   RecurrenceInput,
   RecurrenceJson,
   RecurrenceJsonEntry,
@@ -117,8 +120,15 @@ export class Recurrence {
   }
 
   /**
-   * Create a recurrence from explicit dates only.
+   * Create an anchored cadence measured in elapsed whole seconds.
    */
+  static elapsed(options: RecurrenceElapsedInput): Recurrence {
+    validateOptionsObject(options, 'elapsed');
+    if (!options) recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'Recurrence.elapsed() requires options');
+    return new Recurrence({ tzid: options.tzid, include: [{ elapsed: options }] });
+  }
+
+  /** Create a recurrence from explicit dates only. */
   static dates(values: TemporalDateLike[], options: { start?: TemporalDateLike | null; tzid?: string | null } = {}): Recurrence {
     validateDateArray(values, 'Recurrence.dates()');
     validateOptionsObject(options, 'dates');
@@ -132,23 +142,23 @@ export class Recurrence {
   /**
    * Rebuild a recurrence from its JSON representation.
    */
-  static fromJSON(json: RecurrenceJson): Recurrence {
-    return Recurrence.fromStructure(structureFromJson(json));
+  static fromJSON(json: RecurrenceJson, options: RecurrenceJsonOptions = {}): Recurrence {
+    return Recurrence.fromStructure(structureFromJson(json, options));
   }
 
   /**
    * Report whether a value is accepted by {@link Recurrence.fromJSON}.
    */
-  static isJSON(value: unknown): value is RecurrenceJson {
-    return Recurrence.validateJSON(value).ok;
+  static isJSON(value: unknown, options: RecurrenceJsonOptions = {}): value is RecurrenceJson {
+    return Recurrence.validateJSON(value, options).ok;
   }
 
   /**
    * Validate a value as recurrence JSON without throwing.
    */
-  static validateJSON(value: unknown): { ok: true } | { ok: false; error: Error } {
+  static validateJSON(value: unknown, options: RecurrenceJsonOptions = {}): { ok: true } | { ok: false; error: Error } {
     try {
-      Recurrence.fromJSON(value as RecurrenceJson);
+      Recurrence.fromJSON(value as RecurrenceJson, options);
       return { ok: true };
     } catch (error) {
       return {
@@ -424,8 +434,19 @@ export class Recurrence {
         'This Recurrence expression cannot be serialized as a flat RFC string',
       );
     }
+    const elapsedSources = [...this.state.include, ...this.state.exclude].filter(entry => entry.kind === 'elapsed');
+    if (elapsedSources.length) {
+      const entry = this.state.include[0];
+      if (this.state.include.length === 1 && !this.state.exclude.length && entry?.kind === 'elapsed') return elapsedRfc(entry.source);
+      recurrenceError(TEMPORAL_ERROR_CODES.UNSERIALIZABLE_EXPRESSION, 'Composed elapsed expressions require native JSON');
+    }
     const lines: string[] = [];
-    if (this.state.start) lines.push(renderDtstart(this.state.start));
+    const calendarSources = [...this.state.include, ...this.state.exclude].filter(entry => entry.kind === 'rule');
+    const effectiveStart = this.state.start ?? calendarSources[0]?.source.spec.dtstart;
+    if (calendarSources.some(entry => entry.source.spec.dtstart.epochNanoseconds !== effectiveStart?.epochNanoseconds || entry.source.spec.tzid !== effectiveStart.timeZoneId)) {
+      recurrenceError(TEMPORAL_ERROR_CODES.UNSERIALIZABLE_EXPRESSION, 'Rules with different starts or timezones require native JSON');
+    }
+    if (effectiveStart) lines.push(renderDtstart(effectiveStart));
 
     for (const entry of this.state.include) {
       if (entry.kind === 'rule') {
@@ -434,7 +455,7 @@ export class Recurrence {
           .filter((current: string) => !current.startsWith('DTSTART:') && !current.startsWith('DTSTART;'))
           .join('\n');
         if (line) lines.push(line);
-      } else if (entry.values.length) {
+      } else if (entry.kind === 'dates' && entry.values.length) {
         lines.push(renderDateList('RDATE', entry.values, this.state.tzid));
       }
     }
@@ -447,7 +468,7 @@ export class Recurrence {
           .map((current: string) => current.replace(/^RRULE:/, 'EXRULE:'))
           .join('\n');
         if (line) lines.push(line);
-      } else if (entry.values.length) {
+      } else if (entry.kind === 'dates' && entry.values.length) {
         lines.push(renderDateList('EXDATE', entry.values, this.state.tzid));
       }
     }
@@ -492,13 +513,13 @@ function inputFromState(state: RecurrenceState): RecurrenceInput {
     tzid: state.tzid,
     include: state.include.map((entry) => (
       entry.kind === 'rule'
-        ? { rule: coreOptionsToRuleInput(entry.options) }
-        : { dates: entry.values }
+        ? { rule: { ...coreOptionsToRuleInput(entry.options), start: entry.source.spec.dtstart.toInstant(), until: entry.source.spec.until?.toInstant() } }
+        : entry.kind === 'elapsed' ? { elapsed: entry.options } : { dates: entry.values }
     )),
     exclude: state.exclude.map((entry) => (
       entry.kind === 'rule'
-        ? { rule: coreOptionsToRuleInput(entry.options) }
-        : { dates: entry.values }
+        ? { rule: { ...coreOptionsToRuleInput(entry.options), start: entry.source.spec.dtstart.toInstant(), until: entry.source.spec.until?.toInstant() } }
+        : entry.kind === 'elapsed' ? { elapsed: entry.options } : { dates: entry.values }
     )),
   };
 }
@@ -534,6 +555,7 @@ function cloneRuleInput(input: RecurrenceRuleInput): RecurrenceRuleInput {
 
 function cloneEntry(entry: RecurrenceEntry): RecurrenceEntry {
   if ('rule' in entry) return { rule: cloneRuleInput(entry.rule) };
+  if ('elapsed' in entry) return { elapsed: { ...entry.elapsed, start: cloneDateLike(entry.elapsed.start)!, until: cloneDateLike(entry.elapsed.until) } };
   return { dates: entry.dates.map((value) => cloneDateLike(value) as TemporalDateLike) };
 }
 
@@ -610,6 +632,7 @@ function serializeRuleInput(input: RecurrenceRuleInput): RecurrenceJsonRuleInput
 
 function serializeEntry(entry: RecurrenceEntry): RecurrenceJsonEntry {
   if ('rule' in entry) return { rule: serializeRuleInput(entry.rule) };
+  if ('elapsed' in entry) return { elapsed: { ...entry.elapsed, start: serializeDateLike(entry.elapsed.start)!, until: serializeDateLike(entry.elapsed.until) } };
   return { dates: entry.dates.map((value) => serializeDateLike(value)!) };
 }
 
@@ -617,6 +640,7 @@ function structureToJson(structure: RecurrenceStructure): RecurrenceJson {
   switch (structure.kind) {
     case 'input':
       return {
+        temporalVersion: 2,
         kind: 'input',
         start: serializeDateLike(structure.input.start) ?? null,
         tzid: structure.input.tzid ?? null,
@@ -626,11 +650,13 @@ function structureToJson(structure: RecurrenceStructure): RecurrenceJson {
     case 'union':
     case 'intersection':
       return {
+        temporalVersion: 2,
         kind: structure.kind,
         expressions: structure.expressions.map(structureToJson),
       };
     case 'difference':
       return {
+        temporalVersion: 2,
         kind: 'difference',
         include: structureToJson(structure.include),
         exclude: structureToJson(structure.exclude),
@@ -638,11 +664,24 @@ function structureToJson(structure: RecurrenceStructure): RecurrenceJson {
   }
 }
 
-function structureFromJson(json: RecurrenceJson): RecurrenceStructure {
+function structureFromJson(json: RecurrenceJson, options: RecurrenceJsonOptions = {}): RecurrenceStructure {
   if (!json || typeof json !== 'object' || !('kind' in json)) {
     recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'Recurrence.fromJSON() expects a valid recurrence JSON object');
   }
 
+  if (json.temporalVersion !== undefined && json.temporalVersion !== 2) {
+    recurrenceError(TEMPORAL_ERROR_CODES.UNSUPPORTED_TEMPORAL_VERSION, 'Unsupported recurrence temporalVersion');
+  }
+  if (json.kind === 'input' && (!Array.isArray(json.include) || !Array.isArray(json.exclude))) {
+    recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'Recurrence JSON expects include and exclude arrays');
+  }
+  if (json.kind === 'input' && json.temporalVersion === undefined) {
+    const entries = [...json.include, ...json.exclude];
+    if (entries.some(entry => 'elapsed' in entry) || (entries.some(entry => 'rule' in entry) && options.legacy !== 'calendar')) {
+      recurrenceError(TEMPORAL_ERROR_CODES.UNSUPPORTED_TEMPORAL_VERSION,
+        'Unversioned rule JSON requires an explicit { legacy: "calendar" } migration choice');
+    }
+  }
   switch (json.kind) {
     case 'input':
       return {
@@ -658,13 +697,13 @@ function structureFromJson(json: RecurrenceJson): RecurrenceStructure {
     case 'intersection':
       return {
         kind: json.kind,
-        expressions: json.expressions.map(structureFromJson),
+        expressions: json.expressions.map(value => structureFromJson(value, options)),
       };
     case 'difference':
       return {
         kind: 'difference',
-        include: structureFromJson(json.include),
-        exclude: structureFromJson(json.exclude),
+        include: structureFromJson(json.include, options),
+        exclude: structureFromJson(json.exclude, options),
       };
   }
 }
@@ -673,6 +712,7 @@ function reviveJsonEntry(entry: RecurrenceJsonEntry): RecurrenceEntry {
   if ('rule' in entry) {
     return { rule: reviveJsonRuleInput(entry.rule) };
   }
+  if ('elapsed' in entry) return { elapsed: { ...entry.elapsed, start: reviveDateLike(entry.elapsed.start)!, until: reviveDateLike(entry.elapsed.until) } };
   return { dates: entry.dates.map((value) => reviveDateLike(value) as TemporalDateLike) };
 }
 

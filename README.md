@@ -116,6 +116,7 @@ import {
   Recurrence,
   parse,
   rule,
+  elapsed,
   TEMPORAL_ERROR_CODES,
   TemporalApiError,
 } from '@rrulenet/recurrence';
@@ -131,6 +132,7 @@ Main exports:
 - `Recurrence`
 - `parse(options)`
 - `rule(options)`
+- `elapsed(options)`
 - `TEMPORAL_ERROR_CODES`
 - `TemporalApiError`
 
@@ -208,6 +210,60 @@ console.log(recurrence.take(3).map((value) => value.toString()));
 ```
 
 This is sugar for creating a `Recurrence` with one included rule. Use it when your schedule is a single rule and you want the shortest entry point.
+
+### `Recurrence.elapsed(options)` and `elapsed(options)` (0.2.0)
+
+Use an explicit elapsed cadence when a fixed duration must pass between
+occurrences, including both autumn passages:
+
+```js
+const cadence = Recurrence.elapsed({
+  start: Temporal.Instant.from('2026-10-24T23:30:00Z'),
+  every: 'PT1H',
+  tzid: 'Europe/Paris',
+  count: 4,
+});
+// UTC: 23:30, 00:30, 01:30, 02:30; both local 02:30 passages are present.
+```
+
+`start` is mandatory and exact. `every` accepts positive ISO time durations in
+whole hours, minutes, and seconds and normalizes to `PT<number>S`. Calendar units
+(`P1D`, months, years) and fractional-second steps are rejected. Anchors and
+bounds retain nanosecond precision. Optional `count` and inclusive `until` are
+mutually exclusive. `tzid` controls display only; it cannot move the grid.
+Elapsed entries also work in constructor `include`/`exclude` arrays and algebra.
+
+Calendar `rule` and `parse` keep local clock progression at every frequency.
+Autumn overlaps select the first passage; spring gaps use the offset before the
+transition, then later periods resume the nominal time (RFC 5545, verified
+erratum 4271). Resolved duplicates count once. This changes earlier local
+subdaily behavior. COUNT with UNTIL is rejected, and invalid base-calendar dates
+are omitted rather than clamped.
+
+Native JSON emits `temporalVersion: 2` on every expression node and retains
+`rule`, `elapsed`, or `dates` discriminators. Unknown versions fail with
+`TEMPORAL_UNSUPPORTED_TEMPORAL_VERSION`. Unversioned rule JSON requires an
+explicit migration choice:
+
+```js
+const adopted = Recurrence.fromJSON(legacyJson, { legacy: 'calendar' });
+const saved = adopted.toJSON(); // Persist the reviewed versioned definition.
+```
+
+`isJSON` and `validateJSON` accept the same option. Date-only legacy inputs can
+still be read; unversioned elapsed inputs cannot. Adoption chooses the new
+calendar semantics, so inspect the original definition first. To retain an
+elapsed intention, construct an elapsed source using its original exact anchor.
+
+Upgrade all readers and workers before saving version 2 JSON: older versions
+may accept it while applying the previous recurrence semantics. Keep original
+definitions and execution history for rollback.
+
+Simple elapsed expressions can export a UTC SECONDLY rule. Mixed elapsed
+expressions, fractional seconds, distinct rule anchors, and local second-passage
+DTSTART boundaries that RFC cannot preserve throw
+`TEMPORAL_UNSERIALIZABLE_EXPRESSION`. Native JSON remains the lossless format.
+Explicit second-passage dates export as UTC where necessary.
 
 ### `Recurrence.dates(values, options?)`
 
@@ -592,6 +648,7 @@ const json = recurrence.toJSON();
 
 console.log(json);
 // {
+//   temporalVersion: 2,
 //   kind: 'input',
 //   start: '2025-01-01T09:00:00+01:00[Europe/Paris]',
 //   tzid: 'Europe/Paris',
@@ -631,6 +688,7 @@ const recurrence = rule({
 const saved = recurrence.toJSON();
 console.log(saved);
 // {
+//   temporalVersion: 2,
 //   kind: 'input',
 //   start: '2025-01-01T09:00:00+01:00[Europe/Paris]',
 //   tzid: 'Europe/Paris',
@@ -726,6 +784,7 @@ type RecurrenceInput = {
 
 type RecurrenceEntry =
   | { rule: RecurrenceRuleInput }
+  | { elapsed: RecurrenceElapsedInput }
   | { dates: (Date | Temporal.Instant | Temporal.ZonedDateTime)[] };
 ```
 
@@ -869,6 +928,7 @@ const stable = recurrence.normalize().toJSON();
 
 console.log(snapshot);
 // {
+//   temporalVersion: 2,
 //   kind: 'input',
 //   start: '2026-01-01T09:00:00+01:00[Europe/Paris]',
 //   tzid: 'Europe/Paris',
@@ -910,6 +970,7 @@ Available error codes:
 - `TEMPORAL_INVALID_COLLECTION_ELEMENT`
 - `TEMPORAL_INVALID_ENTRY`
 - `TEMPORAL_UNSERIALIZABLE_EXPRESSION`
+- `TEMPORAL_UNSUPPORTED_TEMPORAL_VERSION`
 
 ## Development
 

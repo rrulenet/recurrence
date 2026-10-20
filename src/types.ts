@@ -68,6 +68,25 @@ export interface RecurrenceRuleInput {
   skip?: Skip | null;
 }
 
+/** A fixed grid of whole elapsed seconds. tzid controls presentation only. */
+export interface RecurrenceElapsedInput {
+  start: TemporalDateLike;
+  every: string;
+  tzid?: string | null;
+  count?: number | null;
+  until?: TemporalDateLike | null;
+}
+
+export interface RecurrenceJsonElapsedInput extends Omit<RecurrenceElapsedInput, 'start' | 'until'> {
+  start: string;
+  until?: string | null;
+}
+
+export interface RecurrenceJsonOptions {
+  /** Explicitly adopt calendar semantics for unversioned legacy rule JSON. */
+  legacy?: 'calendar';
+}
+
 /**
  * Canonical constructor input shape for {@link Recurrence}.
  */
@@ -83,6 +102,7 @@ export interface RecurrenceInput {
  */
 export type RecurrenceEntry =
   | { rule: RecurrenceRuleInput }
+  | { elapsed: RecurrenceElapsedInput }
   | { dates: TemporalDateLike[] };
 
 /**
@@ -125,12 +145,13 @@ export interface RecurrenceJsonRuleInput {
  */
 export type RecurrenceJsonEntry =
   | { rule: RecurrenceJsonRuleInput }
+  | { elapsed: RecurrenceJsonElapsedInput }
   | { dates: string[] };
 
 /**
  * JSON-safe serialized form of a recurrence expression.
  */
-export type RecurrenceJson =
+export type RecurrenceJson = { temporalVersion?: 2 } & (
   | {
     kind: 'input';
     start: string | null;
@@ -146,4 +167,4 @@ export type RecurrenceJson =
     kind: 'difference';
     include: RecurrenceJson;
     exclude: RecurrenceJson;
-  };
+  });

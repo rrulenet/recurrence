@@ -14,6 +14,7 @@ import {
 } from './temporal-coercion.ts';
 import type { RecurrenceEntry, RecurrenceInput, TemporalDateLike } from './types.ts';
 import { RuleRecurrenceSource, toCoreRuleOptions } from './rules.ts';
+import { elapsedEntry } from './elapsed.ts';
 
 export type RuleEntryState = {
   kind: 'rule';
@@ -27,7 +28,7 @@ export type DatesEntryState = {
   values: Temporal.ZonedDateTime[];
 };
 
-export type EntryState = RuleEntryState | DatesEntryState;
+export type EntryState = RuleEntryState | DatesEntryState | ReturnType<typeof elapsedEntry>;
 
 export type RecurrenceState = {
   start: Temporal.ZonedDateTime | null;
@@ -59,7 +60,7 @@ export function normalizeEntry(
 
   const keys = Object.keys(entry).filter((key) => (entry as Record<string, unknown>)[key] !== undefined);
   if (keys.length !== 1) {
-    recurrenceError(TEMPORAL_ERROR_CODES.INVALID_ENTRY, 'Each recurrence entry must define exactly one of rule or dates');
+    recurrenceError(TEMPORAL_ERROR_CODES.INVALID_ENTRY, 'Each recurrence entry must define exactly one of rule, elapsed, or dates');
   }
 
   if ('rule' in entry) {
@@ -74,6 +75,8 @@ export function normalizeEntry(
     };
   }
 
+  if ('elapsed' in entry) return elapsedEntry(entry.elapsed, inheritedTzid);
+  if (!('dates' in entry)) recurrenceError(TEMPORAL_ERROR_CODES.INVALID_ENTRY, 'Unknown recurrence entry');
   validateDateArray(entry.dates, 'date entry');
   const tzid = inheritedTzid ?? 'UTC';
   const values = entry.dates.map((value) => {
@@ -99,7 +102,7 @@ export function buildState(input: RecurrenceInput): RecurrenceState {
       collectTemporalDateLikeTimezone(entry.rule.start ?? input.start, resolution);
       collectTemporalDateLikeTimezone(entry.rule.until, resolution);
       if (entry.rule.tzid) resolveTzid(entry.rule.tzid, resolution);
-    } else {
+    } else if ('dates' in entry) {
       for (const value of entry.dates) collectTemporalDateLikeTimezone(value, resolution);
     }
   }
@@ -108,7 +111,7 @@ export function buildState(input: RecurrenceInput): RecurrenceState {
       collectTemporalDateLikeTimezone(entry.rule.start ?? input.start, resolution);
       collectTemporalDateLikeTimezone(entry.rule.until, resolution);
       if (entry.rule.tzid) resolveTzid(entry.rule.tzid, resolution);
-    } else {
+    } else if ('dates' in entry) {
       for (const value of entry.dates) collectTemporalDateLikeTimezone(value, resolution);
     }
   }

@@ -25,7 +25,7 @@ export function isPlainObject(value: unknown): value is Record<string, unknown> 
 
 export function validateOptionsObject(
   value: unknown,
-  context: 'constructor' | 'parse' | 'rule' | 'dates',
+  context: 'constructor' | 'parse' | 'rule' | 'dates' | 'elapsed',
 ): asserts value is Record<string, unknown> | undefined {
   if (value === undefined) return;
   if (isPlainObject(value)) return;
@@ -137,8 +137,10 @@ export function coerceTemporalDateLikeForTzid(
 
   if (isTemporalZonedDateTimeLike(value)) {
     const resolvedTzid = tzid ?? value.timeZoneId;
-    const zonedDateTime = Temporal.Instant
-      .fromEpochMilliseconds(value.toInstant().epochMilliseconds)
+    // The public structural type only promises epochMilliseconds from
+    // toInstant(). Its validated zoned string also retains finer precision.
+    const zonedDateTime = Temporal.ZonedDateTime.from(value.toString())
+      .toInstant()
       .toZonedDateTimeISO(resolvedTzid);
     return {
       date: new Date(zonedDateTime.epochMilliseconds),
@@ -154,7 +156,7 @@ export function coerceTemporalDateLikeForTzid(
     const resolvedTzid = tzid ?? 'UTC';
     return {
       date,
-      zonedDateTime: Temporal.Instant.fromEpochMilliseconds(value.epochMilliseconds).toZonedDateTimeISO(resolvedTzid),
+      zonedDateTime: Temporal.Instant.from(value.toString()).toZonedDateTimeISO(resolvedTzid),
     };
   }
 

@@ -14,6 +14,9 @@ export { Recurrence };
 export { TEMPORAL_ERROR_CODES, TemporalApiError } from './errors.ts';
 export type {
   RecurrenceEntry,
+  RecurrenceElapsedInput,
+  RecurrenceJsonElapsedInput,
+  RecurrenceJsonOptions,
   RecurrenceFrequency,
   RecurrenceInput,
   RecurrenceJson,
@@ -39,4 +42,9 @@ export function parse(...args: Parameters<typeof Recurrence.parse>): ReturnType<
  */
 export function rule(...args: Parameters<typeof Recurrence.rule>): ReturnType<typeof Recurrence.rule> {
   return Recurrence.rule(...args);
+}
+
+/** Convenience alias for the anchored elapsed cadence constructor. */
+export function elapsed(...args: Parameters<typeof Recurrence.elapsed>): ReturnType<typeof Recurrence.elapsed> {
+  return Recurrence.elapsed(...args);
 }

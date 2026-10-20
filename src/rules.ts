@@ -70,6 +70,10 @@ export class RuleRecurrenceSource implements SourceQuery {
   }
 
   toSerializedString(): string {
+    if (this.spec.dtstart.epochNanoseconds % 1_000_000_000n ||
+        (this.spec.until && this.spec.until.epochNanoseconds % 1_000_000_000n)) {
+      recurrenceError(TEMPORAL_ERROR_CODES.UNSERIALIZABLE_EXPRESSION, 'RFC 5545 cannot preserve fractional seconds');
+    }
     return optionsToString(this.serializedOptions);
   }
 }
@@ -114,6 +118,9 @@ export function toCoreRuleOptions(
   inheritedStart?: TemporalDateLike | null,
   inheritedTzid?: string | null,
 ) {
+  if (input.count != null && input.until != null) {
+    recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, 'COUNT and UNTIL are mutually exclusive');
+  }
   const resolution = createTimezoneResolution(input.tzid ?? inheritedTzid);
   collectTemporalDateLikeTimezone(input.start ?? inheritedStart, resolution);
   collectTemporalDateLikeTimezone(input.until, resolution);

@@ -153,6 +153,7 @@ test('Recurrence.toJSON returns a stable public shape for flat recurrences', () 
   });
 
   assert.deepEqual(recurrence.toJSON(), {
+    temporalVersion: 2,
     kind: 'input',
     start: '1997-09-02T09:00:00-04:00[America/New_York]',
     tzid: 'America/New_York',
@@ -209,8 +210,10 @@ test('Recurrence.toJSON returns a stable structural shape for algebraic recurren
   );
 
   assert.deepEqual(recurrence.toJSON(), {
+    temporalVersion: 2,
     kind: 'difference',
     include: {
+      temporalVersion: 2,
       kind: 'union',
       expressions: [
         weekdays.toJSON(),
@@ -218,6 +221,7 @@ test('Recurrence.toJSON returns a stable structural shape for algebraic recurren
       ],
     },
     exclude: {
+      temporalVersion: 2,
       kind: 'input',
       start: null,
       tzid: null,
@@ -320,10 +324,12 @@ test('Recurrence.normalize flattens nested unions and intersections', () => {
   const nestedIntersection = Recurrence.intersection(Recurrence.intersection(a, b), c).flatten();
 
   assert.deepEqual(nestedUnion.toJSON(), {
+    temporalVersion: 2,
     kind: 'union',
     expressions: [a.toJSON(), b.toJSON(), c.toJSON()],
   });
   assert.deepEqual(nestedIntersection.toJSON(), {
+    temporalVersion: 2,
     kind: 'intersection',
     expressions: [a.toJSON(), b.toJSON(), c.toJSON()],
   });

@@ -265,6 +265,18 @@ DTSTART boundaries that RFC cannot preserve throw
 `TEMPORAL_UNSERIALIZABLE_EXPRESSION`. Native JSON remains the lossless format.
 Explicit second-passage dates export as UTC where necessary.
 
+### Selector validation
+
+Rule construction, RFC parsing, and native JSON ingestion reject invalid
+`byHour`, `byMinute`, `bySecond`, `byMonth`, and `byMonthDay` selectors with a
+`RangeError`. A list containing an invalid member is rejected as a whole.
+`Recurrence.validateJSON()` returns `{ ok: false, error }` for these inputs;
+`Recurrence.isJSON()` returns `false`.
+
+Second 60 resolves to second 59, with collisions removed before BYSETPOS and
+COUNT. JSON and RFC serialization preserve the original selector. Valid
+negative month days and supported RSCALE leap-month tokens remain accepted.
+
 ### `Recurrence.dates(values, options?)`
 
 Create a `Recurrence` from explicit dates only.

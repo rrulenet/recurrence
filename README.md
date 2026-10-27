@@ -280,6 +280,17 @@ negative month days and supported RSCALE leap-month tokens remain accepted.
 Repeated clock selector members do not shift BYSETPOS positions or consume
 COUNT. Native JSON and RFC serialization preserve the original lists.
 
+BYSETPOS selects from the distinct chronological candidates of a complete
+frequency interval, including all selected months for a yearly rule. RFC numeric
+tokens are checked before conversion rather than accepting empty members or
+JavaScript hexadecimal, exponent, or fractional syntax.
+
+Calendar queries detect proven unreachable clock phases. A calendar search that
+exhausts its candidate budget before establishing completeness throws an error
+with code `RECURRENCE_SEARCH_LIMIT`, propagated from `core`. Handle that failure
+separately from an empty result; it is not a validation failure reported by
+`Recurrence.validateJSON()`.
+
 ### `Recurrence.dates(values, options?)`
 
 Create a `Recurrence` from explicit dates only.

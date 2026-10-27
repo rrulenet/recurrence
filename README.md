@@ -277,6 +277,9 @@ Second 60 resolves to second 59, with collisions removed before BYSETPOS and
 COUNT. JSON and RFC serialization preserve the original selector. Valid
 negative month days and supported RSCALE leap-month tokens remain accepted.
 
+Repeated clock selector members do not shift BYSETPOS positions or consume
+COUNT. Native JSON and RFC serialization preserve the original lists.
+
 ### `Recurrence.dates(values, options?)`
 
 Create a `Recurrence` from explicit dates only.

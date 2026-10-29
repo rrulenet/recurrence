@@ -233,8 +233,14 @@ export class Recurrence {
    * Return all occurrences, optionally short-circuiting through an iterator.
    */
   all(iterator?: (value: Temporal.ZonedDateTime, index: number) => boolean): Temporal.ZonedDateTime[] {
-    const values = new SetEngine(this.expression).all();
-    return iterator ? applyIterator(values, iterator) : values;
+    const engine = new SetEngine(this.expression);
+    if (!iterator) return engine.all();
+    const values: Temporal.ZonedDateTime[] = [];
+    for (const value of engine.iterate()) {
+      if (!iterator(value, values.length)) break;
+      values.push(value);
+    }
+    return values;
   }
 
   /**

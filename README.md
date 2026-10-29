@@ -334,6 +334,14 @@ console.log(values.map((value) => value.toString()));
 
 You can also provide an iterator to stop early:
 
+Calendar and elapsed sources stream through this callback, including unions,
+intersections, and exclusions. `first()` and `take()` use this path too, so
+`take(1000)` can read past the default finite preview of an unbounded `all()`.
+Dense calendar periods construct only the required date/time slots. Dedicated
+RSCALE month/year rules and custom sources without a stream retain their
+existing materialized traversal. A filtered search that exhausts its budget
+throws `RecurrenceSearchLimitError` rather than claiming that no values remain.
+
 ```js
 const firstThree = recurrence.all((value, index) => index < 3);
 console.log(firstThree.map((value) => value.toString()));

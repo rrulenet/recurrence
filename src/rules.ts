@@ -41,6 +41,10 @@ export class RuleRecurrenceSource implements SourceQuery {
     return this.source.all();
   }
 
+  iterate(): Generator<Temporal.ZonedDateTime> {
+    return this.source.iterate();
+  }
+
   between(after: Temporal.Instant, before: Temporal.Instant, inc: boolean): Temporal.ZonedDateTime[] {
     return this.source.between(after, before, inc);
   }

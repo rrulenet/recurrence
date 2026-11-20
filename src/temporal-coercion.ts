@@ -1,7 +1,7 @@
 import { Temporal } from 'temporal-polyfill';
 
 import { TEMPORAL_ERROR_CODES, recurrenceError } from './errors.ts';
-import type { TemporalDateLike, TemporalInstantLike, TemporalZonedDateTimeLike } from './types.ts';
+import type { RecurrenceDateLike, TemporalDateLike, TemporalInstantLike, TemporalZonedDateTimeLike } from './types.ts';
 
 export type TimezoneResolution = {
   explicitTzid?: string | null;
@@ -107,10 +107,10 @@ export function finalizeTzid(resolution: TimezoneResolution): string | null | un
 }
 
 export function collectTemporalDateLikeTimezone(
-  value: TemporalDateLike | null | undefined,
+  value: RecurrenceDateLike | null | undefined,
   resolution: TimezoneResolution,
 ): void {
-  if (value === undefined || value === null || value instanceof Date || isTemporalInstantLike(value)) return;
+  if (value === undefined || value === null || typeof value === 'string' || value instanceof Date || isTemporalInstantLike(value)) return;
   if (isTemporalZonedDateTimeLike(value)) {
     resolveTzid(value.timeZoneId, resolution);
     return;
@@ -167,4 +167,18 @@ export function coerceBoundary(value: TemporalDateLike, tzid?: string | null): T
   const coerced = coerceTemporalDateLikeForTzid(value, tzid);
   if (!coerced) recurrenceError(TEMPORAL_ERROR_CODES.INVALID_DATE, 'Invalid date');
   return coerced.zonedDateTime.toInstant();
+}
+
+export function coerceCalendarDateLikeForTzid(
+  value: RecurrenceDateLike | null | undefined,
+  tzid?: string | null,
+): CoercedTemporalDateLike | null | undefined {
+  if (typeof value !== 'string') return coerceTemporalDateLikeForTzid(value, tzid);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) recurrenceError(TEMPORAL_ERROR_CODES.INVALID_DATE, 'Expected an ISO calendar date (YYYY-MM-DD)');
+  try {
+    const zonedDateTime = Temporal.PlainDate.from(value).toZonedDateTime(tzid ?? 'UTC');
+    return { date: new Date(zonedDateTime.epochMilliseconds), zonedDateTime };
+  } catch {
+    recurrenceError(TEMPORAL_ERROR_CODES.INVALID_DATE, 'Invalid ISO calendar date');
+  }
 }

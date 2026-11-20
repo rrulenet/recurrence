@@ -6,7 +6,7 @@ import {
   type SourceQuery,
 } from '@rrulenet/core/rule';
 import { Temporal } from 'temporal-polyfill';
-import { RuleSource } from '@rrulenet/core/engine';
+import { RuleSource, type CandidateBudget, type QueryWindow } from '@rrulenet/core/engine';
 import {
   isFullyConvertibleToText as isRuleFullyConvertibleToText,
   ruleToText,
@@ -20,45 +20,51 @@ import { Weekday } from '@rrulenet/core/options';
 import { TEMPORAL_ERROR_CODES, recurrenceError } from './errors.ts';
 import {
   collectTemporalDateLikeTimezone,
-  coerceTemporalDateLikeForTzid,
+  coerceCalendarDateLikeForTzid,
   createTimezoneResolution,
   finalizeTzid,
 } from './temporal-coercion.ts';
-import type { RecurrenceFrequency, RecurrenceRuleInput, RecurrenceWeekdayToken, RecurrenceWeekdayValue, TemporalDateLike } from './types.ts';
+import type { RecurrenceDateLike, RecurrenceFrequency, RecurrenceRuleInput, RecurrenceWeekdayToken, RecurrenceWeekdayValue } from './types.ts';
 
 export class RuleRecurrenceSource implements SourceQuery {
+  private cachedSource?: RuleSource;
+
   constructor(
     readonly spec: RuleSpec,
     readonly options: Options,
     private readonly serializedOptions: Partial<Options>,
   ) {}
 
-  private get source() {
-    return new RuleSource(this.spec);
+  private get source(): RuleSource {
+    return this.cachedSource ??= new RuleSource(this.spec);
   }
 
-  all(): Temporal.ZonedDateTime[] {
-    return this.source.all();
+  all(budget?: CandidateBudget): Temporal.ZonedDateTime[] {
+    return this.source.all(budget);
   }
 
-  iterate(): Generator<Temporal.ZonedDateTime> {
-    return this.source.iterate();
+  iterate(budget?: CandidateBudget): Generator<Temporal.ZonedDateTime> {
+    return this.source.iterate(budget);
   }
 
-  between(after: Temporal.Instant, before: Temporal.Instant, inc: boolean): Temporal.ZonedDateTime[] {
-    return this.source.between(after, before, inc);
+  iterateWindow(window: QueryWindow, budget?: CandidateBudget): Generator<Temporal.ZonedDateTime> {
+    return this.source.iterateWindow(window, budget);
   }
 
-  after(after: Temporal.Instant, inc: boolean): Temporal.ZonedDateTime | null {
-    return this.source.after(after, inc);
+  between(after: Temporal.Instant, before: Temporal.Instant, inc: boolean, budget?: CandidateBudget): Temporal.ZonedDateTime[] {
+    return this.source.between(after, before, inc, budget);
   }
 
-  occursAt(instant: Temporal.Instant): boolean {
-    return this.source.occursAt(instant);
+  after(after: Temporal.Instant, inc: boolean, budget?: CandidateBudget): Temporal.ZonedDateTime | null {
+    return this.source.after(after, inc, budget);
   }
 
-  before(before: Temporal.Instant, inc: boolean): Temporal.ZonedDateTime | null {
-    return this.source.before(before, inc);
+  occursAt(instant: Temporal.Instant, budget?: CandidateBudget): boolean {
+    return this.source.occursAt(instant, budget);
+  }
+
+  before(before: Temporal.Instant, inc: boolean, budget?: CandidateBudget): Temporal.ZonedDateTime | null {
+    return this.source.before(before, inc, budget);
   }
 
   toTextDescription(textOptions?: ToTextOptions): string {
@@ -119,7 +125,7 @@ function frequencyToCore(freq: RecurrenceFrequency): Options['freq'] {
 
 export function toCoreRuleOptions(
   input: RecurrenceRuleInput,
-  inheritedStart?: TemporalDateLike | null,
+  inheritedStart?: RecurrenceDateLike | null,
   inheritedTzid?: string | null,
 ) {
   if (input.count != null && input.until != null) {
@@ -129,14 +135,17 @@ export function toCoreRuleOptions(
   collectTemporalDateLikeTimezone(input.start ?? inheritedStart, resolution);
   collectTemporalDateLikeTimezone(input.until, resolution);
   const tzid = finalizeTzid(resolution) ?? null;
-  const start = coerceTemporalDateLikeForTzid(input.start ?? inheritedStart, tzid);
-  const until = coerceTemporalDateLikeForTzid(input.until, tzid);
+  const startInput = input.start ?? inheritedStart;
+  const start = coerceCalendarDateLikeForTzid(startInput, tzid);
+  const until = coerceCalendarDateLikeForTzid(input.until, tzid);
   const coreInput: Partial<Options> = {
     freq: frequencyToCore(input.freq),
     dtstart: start?.date ?? (start === null ? null : undefined),
+    dtstartDate: typeof startInput === 'string' ? startInput : undefined,
     interval: input.interval,
     count: input.count ?? undefined,
     until: until?.date ?? (until === null ? null : undefined),
+    untilDate: typeof input.until === 'string' ? input.until : undefined,
     wkst: toWkst(input.wkst),
     tzid,
     bysetpos: input.bySetPos ?? null,
@@ -183,11 +192,11 @@ export function coreOptionsToRuleInput(options: Partial<Options>): RecurrenceRul
 
   return {
     freq: ['YEARLY', 'MONTHLY', 'WEEKLY', 'DAILY', 'HOURLY', 'MINUTELY', 'SECONDLY'][options.freq ?? 3] as RecurrenceFrequency,
-    start: options.dtstart ?? undefined,
+    start: options.dtstartDate ?? options.dtstart ?? undefined,
     tzid: options.tzid ?? undefined,
     interval: options.interval,
     count: options.count,
-    until: options.until ?? undefined,
+    until: options.untilDate ?? options.until ?? undefined,
     wkst: typeof options.wkst === 'number' ? (['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'][options.wkst] as RecurrenceWeekdayToken) : undefined,
     bySetPos: options.bysetpos ?? undefined,
     byMonth: options.bymonth ?? undefined,

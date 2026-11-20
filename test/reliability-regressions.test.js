@@ -20,7 +20,9 @@ test('modern facade rejects malformed RFC numeric lists and exposes search exhau
   const empty = Recurrence.rule({ freq: 'MINUTELY', start: Temporal.Instant.from('2026-07-08T08:27:55Z'),
     interval: 10, byMinute: [0, 10, 20, 30, 40, 50] });
   assert.equal(empty.after(Temporal.Instant.from('2026-07-08T08:27:55Z'), false), null);
-  const unresolved = Recurrence.rule({ freq: 'YEARLY', start: Temporal.Instant.from('2026-01-01T09:00:00Z'),
+  const impossible = Recurrence.rule({ freq: 'YEARLY', start: Temporal.Instant.from('2026-01-01T09:00:00Z'),
     byMonth: [2], byMonthDay: [30], count: 1 });
+  assert.equal(impossible.first(), null);
+  const unresolved = Recurrence.rule({ ...impossible.toInput().include[0].rule, freq: 'MONTHLY' });
   assert.throws(() => unresolved.all(), error => error.code === 'RECURRENCE_SEARCH_LIMIT');
 });

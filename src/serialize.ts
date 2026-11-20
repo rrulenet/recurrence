@@ -1,4 +1,5 @@
 import { Temporal } from 'temporal-polyfill';
+import { formatRfcDate } from '@rrulenet/core/rule';
 import { TEMPORAL_ERROR_CODES, recurrenceError } from './errors.ts';
 
 function assertWholeSecond(value: Temporal.ZonedDateTime): void {
@@ -25,8 +26,20 @@ export function renderDtstart(zdt: Temporal.ZonedDateTime): string {
   return `DTSTART;TZID=${zdt.timeZoneId}:${formatCompactLocal(zdt)}`;
 }
 
-export function renderDateList(label: 'RDATE' | 'EXDATE', dates: Temporal.ZonedDateTime[], tzid?: string | null): string {
-  if (!dates.length) return '';
+export function renderDateList(label: 'RDATE' | 'EXDATE', dates: (Temporal.ZonedDateTime | string)[], tzid?: string | null): string {
+  const plainDates: string[] = [];
+  const times: Temporal.ZonedDateTime[] = [];
+  for (const value of dates) {
+    if (typeof value === 'string') plainDates.push(formatRfcDate(value));
+    else times.push(value);
+  }
+  const lines: string[] = [];
+  if (plainDates.length) lines.push(`${label};VALUE=DATE:${plainDates.join(',')}`);
+  if (times.length) lines.push(renderTimedDateList(label, times, tzid));
+  return lines.join('\n');
+}
+
+function renderTimedDateList(label: 'RDATE' | 'EXDATE', dates: Temporal.ZonedDateTime[], tzid?: string | null): string {
   dates.forEach(assertWholeSecond);
   let resolvedTzid = tzid ?? dates[0]!.timeZoneId;
   if (dates.some(value => {

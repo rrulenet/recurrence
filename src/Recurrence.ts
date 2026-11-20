@@ -1,4 +1,5 @@
 import { SetEngine, type SetExpression } from '@rrulenet/core/engine';
+import { formatRfcDate } from '@rrulenet/core/rule';
 import { describeSetExpression, isSetExpressionFullyConvertible, type ToTextOptions } from '@rrulenet/core/text';
 import { Temporal } from 'temporal-polyfill';
 
@@ -11,6 +12,7 @@ import { buildState, expressionFromState, type RecurrenceState, validateDateArra
 import { coerceBoundary, validateOptionsObject } from './temporal-coercion.ts';
 import type {
   RecurrenceEntry,
+  RecurrenceDateLike,
   RecurrenceElapsedInput,
   RecurrenceJsonOptions,
   RecurrenceInput,
@@ -129,7 +131,7 @@ export class Recurrence {
   }
 
   /** Create a recurrence from explicit dates only. */
-  static dates(values: TemporalDateLike[], options: { start?: TemporalDateLike | null; tzid?: string | null } = {}): Recurrence {
+  static dates(values: RecurrenceDateLike[], options: { start?: RecurrenceDateLike | null; tzid?: string | null } = {}): Recurrence {
     validateDateArray(values, 'Recurrence.dates()');
     validateOptionsObject(options, 'dates');
     return new Recurrence({
@@ -235,24 +237,19 @@ export class Recurrence {
   all(iterator?: (value: Temporal.ZonedDateTime, index: number) => boolean): Temporal.ZonedDateTime[] {
     const engine = new SetEngine(this.expression);
     if (!iterator) return engine.all();
-    const values: Temporal.ZonedDateTime[] = [];
-    for (const value of engine.iterate()) {
-      if (!iterator(value, values.length)) break;
-      values.push(value);
-    }
-    return values;
+    return applyIterator(engine.iterate(), iterator);
   }
 
   /**
    * Return occurrences between two boundaries.
    */
   between(after: TemporalDateLike, before: TemporalDateLike, inc = false, iterator?: (value: Temporal.ZonedDateTime, index: number) => boolean): Temporal.ZonedDateTime[] {
-    const values = new SetEngine(this.expression).between(
-      coerceBoundary(after, this.state?.tzid),
-      coerceBoundary(before, this.state?.tzid),
-      inc,
-    );
-    return iterator ? applyIterator(values, iterator) : values;
+    const engine = new SetEngine(this.expression);
+    const lower = coerceBoundary(after, this.state?.tzid);
+    const upper = coerceBoundary(before, this.state?.tzid);
+    return iterator
+      ? applyIterator(engine.iterateWindow({ after: lower, before: upper, inc }), iterator)
+      : engine.between(lower, upper, inc);
   }
 
   /**
@@ -295,15 +292,11 @@ export class Recurrence {
     if (count === 0) return [];
 
     const out: Temporal.ZonedDateTime[] = [];
-    let boundary = coerceBoundary(date, this.state?.tzid);
-    let inclusive = inc;
-
-    while (out.length < count) {
-      const value = new SetEngine(this.expression).after(boundary, inclusive);
-      if (!value) break;
+    const engine = new SetEngine(this.expression);
+    const after = coerceBoundary(date, this.state?.tzid);
+    for (const value of engine.iterateWindow({ after, inc })) {
       out.push(value);
-      boundary = value.toInstant();
-      inclusive = false;
+      if (out.length === count) break;
     }
 
     return out;
@@ -336,7 +329,10 @@ export class Recurrence {
    * Report whether at least one occurrence exists within the given range.
    */
   hasAnyBetween(after: TemporalDateLike, before: TemporalDateLike, inc = false): boolean {
-    return this.between(after, before, inc, (_, index) => index < 1).length > 0;
+    const lower = coerceBoundary(after, this.state?.tzid);
+    const upper = coerceBoundary(before, this.state?.tzid);
+    for (const _ of new SetEngine(this.expression).iterateWindow({ after: lower, before: upper, inc })) return true;
+    return false;
   }
 
   /**
@@ -351,29 +347,21 @@ export class Recurrence {
   /**
    * Return a new recurrence with additional explicit included dates.
    */
-  includingDates(values: TemporalDateLike[]): Recurrence {
+  includingDates(values: RecurrenceDateLike[]): Recurrence {
     validateDateArray(values, 'includingDates()');
     if (!this.state) return Recurrence.union(this, Recurrence.dates(values));
-    return new Recurrence({
-      start: this.state.start,
-      tzid: this.state.tzid,
-      include: [...this.toInput().include, { dates: values }],
-      exclude: this.toInput().exclude,
-    });
+    const input = this.toInput();
+    return new Recurrence({ ...input, include: [...input.include, { dates: values }] });
   }
 
   /**
    * Return a new recurrence with additional explicit excluded dates.
    */
-  excludingDates(values: TemporalDateLike[]): Recurrence {
+  excludingDates(values: RecurrenceDateLike[]): Recurrence {
     validateDateArray(values, 'excludingDates()');
     if (!this.state) return Recurrence.difference(this, Recurrence.dates(values));
-    return new Recurrence({
-      start: this.state.start,
-      tzid: this.state.tzid,
-      include: this.toInput().include,
-      exclude: [...(this.toInput().exclude ?? []), { dates: values }],
-    });
+    const input = this.toInput();
+    return new Recurrence({ ...input, exclude: [...(input.exclude ?? []), { dates: values }] });
   }
 
   /**
@@ -449,10 +437,13 @@ export class Recurrence {
     const lines: string[] = [];
     const calendarSources = [...this.state.include, ...this.state.exclude].filter(entry => entry.kind === 'rule');
     const effectiveStart = this.state.start ?? calendarSources[0]?.source.spec.dtstart;
-    if (calendarSources.some(entry => entry.source.spec.dtstart.epochNanoseconds !== effectiveStart?.epochNanoseconds || entry.source.spec.tzid !== effectiveStart.timeZoneId)) {
+    const startDate = this.state.start ? this.state.startDate : calendarSources[0]?.options.dtstartDate;
+    if (calendarSources.some(entry => entry.source.spec.dtstart.epochNanoseconds !== effectiveStart?.epochNanoseconds ||
+      entry.source.spec.tzid !== effectiveStart.timeZoneId || entry.options.dtstartDate !== startDate)) {
       recurrenceError(TEMPORAL_ERROR_CODES.UNSERIALIZABLE_EXPRESSION, 'Rules with different starts or timezones require native JSON');
     }
-    if (effectiveStart) lines.push(renderDtstart(effectiveStart));
+    if (startDate) lines.push(`DTSTART;VALUE=DATE:${formatRfcDate(startDate)}`);
+    else if (effectiveStart) lines.push(renderDtstart(effectiveStart));
 
     for (const entry of this.state.include) {
       if (entry.kind === 'rule') {
@@ -497,11 +488,10 @@ export class Recurrence {
   }
 }
 
-function applyIterator<T>(values: T[], iterator: (value: T, index: number) => boolean): T[] {
+function applyIterator<T>(values: Iterable<T>, iterator: (value: T, index: number) => boolean): T[] {
   const accepted: T[] = [];
-  for (let index = 0; index < values.length; index += 1) {
-    const value = values[index]!;
-    if (!iterator(value, index)) break;
+  for (const value of values) {
+    if (!iterator(value, accepted.length)) break;
     accepted.push(value);
   }
   return accepted;
@@ -514,25 +504,25 @@ function assertNonNegativeInteger(value: number, label: string) {
 }
 
 function inputFromState(state: RecurrenceState): RecurrenceInput {
+  const toInput = (entry: RecurrenceState['include'][number]): RecurrenceEntry => {
+    if (entry.kind === 'elapsed') return { elapsed: entry.options };
+    if (entry.kind === 'dates') return { dates: entry.values };
+    return { rule: {
+      ...coreOptionsToRuleInput(entry.options),
+      start: entry.options.dtstartDate ?? entry.source.spec.dtstart.toInstant(),
+      until: entry.options.untilDate ?? entry.source.spec.until?.toInstant(),
+    } };
+  };
   return {
-    start: state.start,
+    start: state.startDate ?? state.start,
     tzid: state.tzid,
-    include: state.include.map((entry) => (
-      entry.kind === 'rule'
-        ? { rule: { ...coreOptionsToRuleInput(entry.options), start: entry.source.spec.dtstart.toInstant(), until: entry.source.spec.until?.toInstant() } }
-        : entry.kind === 'elapsed' ? { elapsed: entry.options } : { dates: entry.values }
-    )),
-    exclude: state.exclude.map((entry) => (
-      entry.kind === 'rule'
-        ? { rule: { ...coreOptionsToRuleInput(entry.options), start: entry.source.spec.dtstart.toInstant(), until: entry.source.spec.until?.toInstant() } }
-        : entry.kind === 'elapsed' ? { elapsed: entry.options } : { dates: entry.values }
-    )),
+    include: state.include.map(toInput),
+    exclude: state.exclude.map(toInput),
   };
 }
 
-function cloneDateLike(value: TemporalDateLike | null | undefined): TemporalDateLike | null | undefined {
-  if (value instanceof Date) return new Date(value.getTime());
-  return value;
+function cloneDateLike<T extends RecurrenceDateLike | null | undefined>(value: T): T {
+  return value instanceof Date ? new Date(value.getTime()) as T : value;
 }
 
 function cloneWeekdayValue(value: RecurrenceWeekdayValue): RecurrenceWeekdayValue {
@@ -562,7 +552,7 @@ function cloneRuleInput(input: RecurrenceRuleInput): RecurrenceRuleInput {
 function cloneEntry(entry: RecurrenceEntry): RecurrenceEntry {
   if ('rule' in entry) return { rule: cloneRuleInput(entry.rule) };
   if ('elapsed' in entry) return { elapsed: { ...entry.elapsed, start: cloneDateLike(entry.elapsed.start)!, until: cloneDateLike(entry.elapsed.until) } };
-  return { dates: entry.dates.map((value) => cloneDateLike(value) as TemporalDateLike) };
+  return { dates: entry.dates.map(cloneDateLike) };
 }
 
 function cloneInput(input: RecurrenceInput): RecurrenceInput {
@@ -613,7 +603,7 @@ function normalizeStructure(structure: RecurrenceStructure): RecurrenceStructure
   }
 }
 
-function serializeDateLike(value: TemporalDateLike | null | undefined): string | null | undefined {
+function serializeDateLike(value: RecurrenceDateLike | null | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
   return value instanceof Date ? Temporal.Instant.from(value.toISOString()).toString() : value.toString();
@@ -693,7 +683,7 @@ function structureFromJson(json: RecurrenceJson, options: RecurrenceJsonOptions 
       return {
         kind: 'input',
         input: {
-          start: reviveDateLike(json.start),
+          start: reviveCalendarDateLike(json.start),
           tzid: json.tzid,
           include: json.include.map(reviveJsonEntry),
           exclude: json.exclude.map(reviveJsonEntry),
@@ -719,14 +709,14 @@ function reviveJsonEntry(entry: RecurrenceJsonEntry): RecurrenceEntry {
     return { rule: reviveJsonRuleInput(entry.rule) };
   }
   if ('elapsed' in entry) return { elapsed: { ...entry.elapsed, start: reviveDateLike(entry.elapsed.start)!, until: reviveDateLike(entry.elapsed.until) } };
-  return { dates: entry.dates.map((value) => reviveDateLike(value) as TemporalDateLike) };
+  return { dates: entry.dates.map((value) => reviveCalendarDateLike(value)!) };
 }
 
 function reviveJsonRuleInput(input: RecurrenceJsonRuleInput): RecurrenceRuleInput {
   return {
     ...input,
-    start: reviveDateLike(input.start),
-    until: reviveDateLike(input.until),
+    start: reviveCalendarDateLike(input.start),
+    until: reviveCalendarDateLike(input.until),
     bySetPos: Array.isArray(input.bySetPos) ? [...input.bySetPos] : input.bySetPos,
     byMonth: Array.isArray(input.byMonth) ? [...input.byMonth] : input.byMonth,
     byMonthDay: Array.isArray(input.byMonthDay) ? [...input.byMonthDay] : input.byMonthDay,
@@ -743,4 +733,8 @@ function reviveDateLike(value: string | null | undefined): TemporalDateLike | nu
   if (value === undefined) return undefined;
   if (value === null) return null;
   return value.includes('[') ? Temporal.ZonedDateTime.from(value) : Temporal.Instant.from(value);
+}
+
+function reviveCalendarDateLike(value: string | null | undefined): RecurrenceDateLike | null | undefined {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : reviveDateLike(value);
 }

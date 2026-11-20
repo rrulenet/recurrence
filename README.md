@@ -143,8 +143,12 @@ unless `inc` is `true`. For an open-ended recurrence, `all()` without a callback
 returns a finite preview of up to 513 values; `count()` without a limit counts
 that preview. Prefer explicit bounds for application queries.
 
+`hasAnyBetween()` stops when it finds a match. Pass a callback to `between()`
+to stop a bounded query early by returning `false`.
+
 A query that exhausts its search budget throws an error with code
-`RECURRENCE_SEARCH_LIMIT`; it does not establish that the schedule is empty.
+`RECURRENCE_SEARCH_LIMIT`. The built-in engine allows 1,000,000 candidate
+evaluations per query across the sources in a recurrence.
 
 ## Persist and interchange
 
@@ -162,6 +166,12 @@ the [JSON reference](https://github.com/rrulenet/recurrence/blob/main/docs/API.m
 `toString()` exports RFC-compatible lines when the expression can be represented
 without losing meaning. Otherwise it throws `TEMPORAL_UNSERIALIZABLE_EXPRESSION`.
 Use `toText()` for a natural-language description.
+
+Use an ISO calendar date string such as `'2025-01-01'` for a calendar rule's
+`start` or `until`, or for an included or excluded date without a time. Native
+JSON retains the date string and RFC export uses the iCalendar `DATE` form.
+Calendar dates resolve in the recurrence's timezone. Supply the same `tzid`
+when parsing date-only RFC output from a recurrence in a named timezone.
 
 ## Validation and errors
 

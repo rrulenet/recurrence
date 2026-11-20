@@ -6,13 +6,13 @@ import { Temporal } from 'temporal-polyfill';
 import { TEMPORAL_ERROR_CODES, recurrenceError } from './errors.ts';
 import {
   collectTemporalDateLikeTimezone,
-  coerceTemporalDateLikeForTzid,
+  coerceCalendarDateLikeForTzid,
   createTimezoneResolution,
   finalizeTzid,
   isPlainObject,
   resolveTzid,
 } from './temporal-coercion.ts';
-import type { RecurrenceEntry, RecurrenceInput, TemporalDateLike } from './types.ts';
+import type { RecurrenceDateLike, RecurrenceEntry, RecurrenceInput } from './types.ts';
 import { RuleRecurrenceSource, toCoreRuleOptions } from './rules.ts';
 import { elapsedEntry } from './elapsed.ts';
 
@@ -25,13 +25,14 @@ export type RuleEntryState = {
 export type DatesEntryState = {
   kind: 'dates';
   source: DateSource;
-  values: Temporal.ZonedDateTime[];
+  values: (Temporal.ZonedDateTime | string)[];
 };
 
 export type EntryState = RuleEntryState | DatesEntryState | ReturnType<typeof elapsedEntry>;
 
 export type RecurrenceState = {
   start: Temporal.ZonedDateTime | null;
+  startDate?: string;
   tzid: string | null;
   include: EntryState[];
   exclude: EntryState[];
@@ -43,7 +44,7 @@ export function validateEntries(entries: unknown, label: 'include' | 'exclude'):
   }
 }
 
-export function validateDateArray(values: unknown, label: string): asserts values is TemporalDateLike[] {
+export function validateDateArray(values: unknown, label: string): asserts values is RecurrenceDateLike[] {
   if (!Array.isArray(values)) {
     recurrenceError(TEMPORAL_ERROR_CODES.INVALID_OPTIONS, `${label} expects an array of date-like values`);
   }
@@ -51,7 +52,7 @@ export function validateDateArray(values: unknown, label: string): asserts value
 
 export function normalizeEntry(
   entry: RecurrenceEntry,
-  inheritedStart: TemporalDateLike | null | undefined,
+  inheritedStart: RecurrenceDateLike | null | undefined,
   inheritedTzid: string | null | undefined,
 ): EntryState {
   if (!isPlainObject(entry)) {
@@ -80,14 +81,14 @@ export function normalizeEntry(
   validateDateArray(entry.dates, 'date entry');
   const tzid = inheritedTzid ?? 'UTC';
   const values = entry.dates.map((value) => {
-    const coerced = coerceTemporalDateLikeForTzid(value, tzid);
+    const coerced = coerceCalendarDateLikeForTzid(value, tzid);
     if (!coerced) recurrenceError(TEMPORAL_ERROR_CODES.INVALID_COLLECTION_ELEMENT, 'Invalid recurrence entry');
     return coerced.zonedDateTime;
   });
   return {
     kind: 'dates',
     source: new DateSource(values),
-    values,
+    values: entry.dates.map((value, index) => typeof value === 'string' ? value : values[index]!),
   };
 }
 
@@ -117,10 +118,11 @@ export function buildState(input: RecurrenceInput): RecurrenceState {
   }
 
   const tzid = finalizeTzid(resolution) ?? null;
-  const start = coerceTemporalDateLikeForTzid(input.start, tzid)?.zonedDateTime ?? null;
+  const start = coerceCalendarDateLikeForTzid(input.start, tzid)?.zonedDateTime ?? null;
 
   return {
     start,
+    startDate: typeof input.start === 'string' ? input.start : undefined,
     tzid,
     include: input.include.map((entry) => normalizeEntry(entry, input.start, tzid)),
     exclude: (input.exclude ?? []).map((entry) => normalizeEntry(entry, input.start, tzid)),

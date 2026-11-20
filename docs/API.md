@@ -734,7 +734,7 @@ This is useful when recurrence expressions are assembled programmatically and yo
 
 ```ts
 type RecurrenceInput = {
-  start?: Date | Temporal.Instant | Temporal.ZonedDateTime | null;
+  start?: RecurrenceDateLike | null;
   tzid?: string | null;
   include: RecurrenceEntry[];
   exclude?: RecurrenceEntry[];
@@ -743,8 +743,13 @@ type RecurrenceInput = {
 type RecurrenceEntry =
   | { rule: RecurrenceRuleInput }
   | { elapsed: RecurrenceElapsedInput }
-  | { dates: (Date | Temporal.Instant | Temporal.ZonedDateTime)[] };
+  | { dates: RecurrenceDateLike[] };
 ```
+
+`RecurrenceDateLike` accepts timed values as well as ISO calendar date strings
+such as `'2025-01-01'`. A calendar rule's `start` and `until` also accept those
+strings. The date is resolved in the recurrence's timezone and retains its
+`DATE` type in RFC output and native JSON.
 
 Rule fields supported by `RecurrenceRuleInput` include:
 - `freq`

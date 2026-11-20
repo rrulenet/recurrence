@@ -44,6 +44,7 @@ export function recurrenceFromParsedOptions(options: RecurrenceParseOptions, fro
       parsed.rawOptions.count,
       parsed.rawOptions.until,
       reinterpretExternalDtstart,
+      parsed.dtstartDate,
     );
     include.push({ rule: coreOptionsToRuleInput(groomed) });
   }
@@ -56,22 +57,24 @@ export function recurrenceFromParsedOptions(options: RecurrenceParseOptions, fro
       parsed.rawOptions.count,
       parsed.rawOptions.until,
       reinterpretExternalDtstart,
+      parsed.dtstartDate,
     );
     exclude.push({ rule: coreOptionsToRuleInput(groomed) });
   }
 
-  const includeDates = parsed.rawOptions.compatible && parsed.dtstart
-    ? [...parsed.rdateValues, parsed.dtstart]
-    : parsed.rdateValues;
+  const includeDates = parsed.rdateValues.map((value, index) => parsed.rdatePlainDates[index] ?? value);
+  if (parsed.rawOptions.compatible && parsed.dtstart) includeDates.push(parsed.dtstartDate ?? parsed.dtstart);
   if (includeDates.length) include.push({ dates: includeDates });
-  if (parsed.exdateValues.length) exclude.push({ dates: parsed.exdateValues });
+  if (parsed.exdateValues.length) exclude.push({
+    dates: parsed.exdateValues.map((value, index) => parsed.exdatePlainDates[index] ?? value),
+  });
 
   if (!include.length && parsed.dtstart) {
-    include.push({ dates: [parsed.dtstart] });
+    include.push({ dates: [parsed.dtstartDate ?? parsed.dtstart] });
   }
 
   return fromState(buildState({
-    start: parsed.dtstart,
+    start: parsed.dtstartDate ?? parsed.dtstart,
     tzid: parsed.tzid,
     include,
     exclude,

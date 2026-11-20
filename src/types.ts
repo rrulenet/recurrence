@@ -25,6 +25,8 @@ export type TemporalZonedDateTimeLike = {
  * Date-like values accepted by the Temporal-first recurrence API.
  */
 export type TemporalDateLike = Date | TemporalInstantLike | TemporalZonedDateTimeLike;
+/** A timed value or an ISO calendar date (YYYY-MM-DD) interpreted in the rule's timezone. */
+export type RecurrenceDateLike = TemporalDateLike | string;
 /**
  * Supported recurrence frequencies.
  */
@@ -48,11 +50,11 @@ export type RecurrenceWeekdayValue =
  */
 export interface RecurrenceRuleInput {
   freq: RecurrenceFrequency;
-  start?: TemporalDateLike | null;
+  start?: RecurrenceDateLike | null;
   tzid?: string | null;
   interval?: number;
   count?: number | null;
-  until?: TemporalDateLike | null;
+  until?: RecurrenceDateLike | null;
   wkst?: RecurrenceWeekdayToken | number | null;
   bySetPos?: number | number[] | null;
   byMonth?: ByMonth | ByMonth[] | null;
@@ -91,7 +93,7 @@ export interface RecurrenceJsonOptions {
  * Canonical constructor input shape for {@link Recurrence}.
  */
 export interface RecurrenceInput {
-  start?: TemporalDateLike | null;
+  start?: RecurrenceDateLike | null;
   tzid?: string | null;
   include: RecurrenceEntry[];
   exclude?: RecurrenceEntry[];
@@ -103,7 +105,7 @@ export interface RecurrenceInput {
 export type RecurrenceEntry =
   | { rule: RecurrenceRuleInput }
   | { elapsed: RecurrenceElapsedInput }
-  | { dates: TemporalDateLike[] };
+  | { dates: RecurrenceDateLike[] };
 
 /**
  * Options accepted by {@link Recurrence.parse}.

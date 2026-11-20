@@ -14,6 +14,7 @@ export { Recurrence };
 export { TEMPORAL_ERROR_CODES, TemporalApiError } from './errors.ts';
 export type {
   RecurrenceEntry,
+  RecurrenceDateLike,
   RecurrenceElapsedInput,
   RecurrenceJsonElapsedInput,
   RecurrenceJsonOptions,
